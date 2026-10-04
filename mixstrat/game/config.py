@@ -1,32 +1,3 @@
-"""Rules configuration for one-street, two-player Kuhn-style poker variants.
-
-A ``GameConfig`` fully specifies one game. It describes the game abstractly:
-cards are integer ranks (0 = lowest) and amounts are chips. How a game is
-*described* to a language model (card names, wording, framing) belongs to the
-prompt layer, not here, so surface variants never change game logic.
-
-Rules covered
--------------
-- Each player antes; the pot starts at ``sum(antes)``.
-- Each player receives one card. With a shared deck the two cards are drawn
-  without replacement from ``deck``; with ``deck_p2`` set, each player is dealt
-  independently from their own deck (asymmetric ranges, no card removal).
-- One betting round. ``first_actor`` acts first. With no bet outstanding a
-  player may check or bet; facing a bet a player may fold, call, or raise
-  (while fewer than ``max_raises`` raises have been made). Check-check, a call,
-  or a fold ends the hand.
-- Sizing: a bet is ``size * pot``. A raise first matches the outstanding bet,
-  then adds ``size * pot`` measured after matching. Raises use ``raise_sizes``
-  (defaults to ``bet_sizes``).
-- Showdown: ``payoff="high"`` means the higher rank wins, ``"low"`` the lower
-  rank. Equal ranks (possible with duplicate cards) split the pot.
-- ``informed[i]`` is whether player ``i`` sees their own card. ``(True, False)``
-  gives a one-sided information game (the clairvoyance game).
-
-Classic Kuhn poker is ``GameConfig(name="kuhn", deck=(1, 1, 1), antes=(1, 1),
-bet_sizes=(0.5,))``: a 1-chip bet into a 2-chip pot is half the pot.
-"""
-
 from __future__ import annotations
 
 import tomllib
