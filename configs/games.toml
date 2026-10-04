@@ -1,0 +1,87 @@
+# Preset one-street poker variants. Each top-level table is one game.
+#
+# Keys (all optional except where noted; defaults in mixstrat/game/config.py):
+#   num_ranks, copies   shorthand for a shared deck with `copies` of each rank
+#   deck                explicit copies per rank, lowest rank first
+#   deck_p2             player 2's own deck (players dealt independently)
+#   antes               [player 0, player 1]
+#   bet_sizes           bet options as fractions of the pot
+#   raise_sizes         raise options (default: bet_sizes)
+#   max_raises          raises allowed per hand (0 = classic: no raising)
+#   first_actor         0 or 1
+#   payoff              "high" or "low"
+#   informed            [player 0 sees own card, player 1 sees own card]
+#   description         free text
+
+# ---------------------------------------------------------------- baselines
+
+[kuhn_classic]
+num_ranks = 3
+description = "Classic Kuhn poker: J, Q, K; 1-chip ante, 1-chip bet (half pot). P1 value -1/18."
+
+[kuhn13]
+num_ranks = 13
+description = "13-card Kuhn, half-pot bet. Main training setting."
+
+# ---------------------------------------------------------------- bet and pot sizes
+
+[kuhn13_quarter_pot]
+num_ranks = 13
+bet_sizes = [0.25]
+
+[kuhn13_pot]
+num_ranks = 13
+bet_sizes = [1.0]
+
+[kuhn13_overbet]
+num_ranks = 13
+bet_sizes = [2.0]
+
+[kuhn13_asym_antes]
+num_ranks = 13
+antes = [0.5, 1.0]
+description = "Blind-like antes: the first actor has less invested."
+
+# ---------------------------------------------------------------- card distributions
+
+[kuhn13_duplicates]
+num_ranks = 13
+copies = 2
+description = "Two of each rank: ties split the pot, and card removal (blockers) matters."
+
+[kuhn13_low_heavy]
+deck = [3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1]
+description = "More low cards than high ones: the same rank is relatively stronger."
+
+[kuhn13_asym_ranges]
+deck = [1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+deck_p2 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+description = "Player 0 dealt from a top-heavy deck: a stronger range than player 1."
+
+# ---------------------------------------------------------------- action structure
+
+[kuhn13_two_sizes]
+num_ranks = 13
+bet_sizes = [0.5, 2.0]
+description = "Choice of half-pot or 2x-pot bet: larger bets should be more polarized."
+
+[kuhn13_one_raise]
+num_ranks = 13
+max_raises = 1
+
+[kuhn13_p1_first]
+num_ranks = 13
+first_actor = 1
+description = "Player order swapped."
+
+# ---------------------------------------------------------------- information and payoffs
+
+[kuhn13_lowball]
+num_ranks = 13
+payoff = "low"
+description = "Lowest card wins."
+
+[clairvoyance13]
+num_ranks = 13
+informed = [true, false]
+description = "Only player 0 sees their card."

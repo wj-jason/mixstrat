@@ -23,5 +23,5 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        files: ^src/
+        files: ^mixstrat/
         additional_dependencies: ["numpy>=1.26"]
