@@ -207,10 +207,12 @@ class GameTree:
                 cards = [0]  # any card: an uninformed player's infoset ignores it
             for card in cards:
                 infoset = self.infoset_of(nid, card)
-                if infoset not in self.infoset_index:
-                    self.infoset_index[infoset] = len(self.infosets)
-                    self.infosets.append(infoset)
-                    self.infoset_node[infoset] = nid
+                if infoset in self.infoset_index:
+                    # Two nodes with the same history labels would share strategies.
+                    raise ValueError(f"duplicate infoset {infoset} (repeated action labels?)")
+                self.infoset_index[infoset] = len(self.infosets)
+                self.infosets.append(infoset)
+                self.infoset_node[infoset] = nid
 
 
 def _with(bets: tuple[float, float], player: int, value: float) -> tuple[float, float]:

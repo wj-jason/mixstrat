@@ -38,6 +38,12 @@ def test_profile_rejects_bad_rows(kuhn: GameTree) -> None:
         Profile(kuhn, probs)
 
 
+def test_profile_renormalizes_clipped_rows(kuhn: GameTree) -> None:
+    probs = Profile.uniform(kuhn).probs
+    probs[0] = np.tile([1 + 5e-7, -5e-7], (3, 1))  # within tolerance, slightly negative
+    assert np.allclose(Profile(kuhn, probs).probs[0].sum(axis=1), 1.0, atol=1e-12)
+
+
 def test_from_infosets_round_trip(kuhn: GameTree) -> None:
     uniform = Profile.uniform(kuhn)
     rebuilt = Profile.from_infosets(kuhn, uniform.to_infosets())

@@ -63,14 +63,15 @@ class GameConfig:
 
         if len(self.antes) != 2 or any(a <= 0 for a in self.antes):
             fail("antes must be two positive numbers")
-        if not self.bet_sizes or any(s <= 0 for s in self.bet_sizes):
-            fail("bet_sizes must be a non-empty list of positive pot fractions")
-        if len(set(self.bet_sizes)) != len(self.bet_sizes):
-            fail("bet_sizes must not repeat")
-        if self.raise_sizes is not None and (
-            not self.raise_sizes or any(s <= 0 for s in self.raise_sizes)
-        ):
-            fail("raise_sizes must be a non-empty list of positive pot fractions")
+        for label, sizes in (("bet_sizes", self.bet_sizes), ("raise_sizes", self.raise_sizes)):
+            if sizes is None:
+                continue
+            if not sizes or any(s <= 0 for s in sizes):
+                fail(f"{label} must be a non-empty list of positive pot fractions")
+            # Infosets are keyed by action labels, which print sizes with :g (see
+            # Action.label), so sizes must stay distinct after formatting.
+            if len({f"{s:g}" for s in sizes}) != len(sizes):
+                fail(f"{label} must not repeat")
         if self.max_raises < 0:
             fail("max_raises must be >= 0")
         if self.first_actor not in (0, 1):

@@ -43,7 +43,8 @@ class Profile:
             assert node.actor is not None
             if not tree.config.informed[node.actor] and not np.allclose(p, p[0], atol=_TOL):
                 raise ValueError(f"node {nid}: uninformed player's rows must be identical")
-            self.probs[nid] = np.clip(p, 0.0, None)
+            p = np.clip(p, 0.0, None)
+            self.probs[nid] = p / p.sum(axis=1, keepdims=True)
 
     # ------------------------------------------------------------ construction
 

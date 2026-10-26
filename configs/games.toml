@@ -17,7 +17,7 @@
 
 [kuhn_classic]
 num_ranks = 3
-description = "Classic Kuhn poker: J, Q, K; 1-chip ante, 1-chip bet (half pot). P1 value -1/18."
+description = "Classic Kuhn poker: J, Q, K; 1-chip ante, 1-chip bet (half pot). Player 0's value is -1/18."
 
 [kuhn13]
 num_ranks = 13

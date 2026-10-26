@@ -23,7 +23,9 @@ htmlcov/
 results/
 outputs/
 checkpoints/
-wandb/
+mlruns/
+mlartifacts/
+mlflow.db
 *.ckpt
 *.safetensors
 

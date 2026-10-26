@@ -49,6 +49,8 @@ def test_lists_become_tuples() -> None:
     [
         {"bet_sizes": [0.0]},
         {"bet_sizes": [0.5, 0.5]},
+        {"bet_sizes": [0.1234567, 0.1234568]},  # same label once printed
+        {"max_raises": 1, "raise_sizes": [1.0, 1.0]},
         {"antes": [1.0, -1.0]},
         {"deck": [1]},
         {"deck": [1, 1], "deck_p2": [1, 1, 1]},
