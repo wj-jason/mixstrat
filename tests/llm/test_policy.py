@@ -8,11 +8,16 @@ from mixstrat.game.cfr import solve
 from mixstrat.game.config import GameConfig
 from mixstrat.game.strategy import Profile
 from mixstrat.game.tree import GameTree, Infoset
-from mixstrat.llm.backend import BackendError, ChoiceDistribution, letter_distribution
+from mixstrat.llm.backend import (
+    BackendError,
+    ChoiceDistribution,
+    ReasoningSample,
+    letter_distribution,
+)
 from mixstrat.llm.evaluate import evaluate, infoset_rows
 from mixstrat.llm.policy import ChoiceCache, query_profile
 from mixstrat.llm.prompts import Message, build_prompt
-from mixstrat.llm.report import card_ranges, format_ranges, render_report
+from mixstrat.llm.report import card_ranges, format_ranges, render_reasoning, render_report
 
 # ---------------------------------------------------------------- letter distributions
 
@@ -139,3 +144,55 @@ def test_render_report(tree: GameTree, equilibrium: Profile) -> None:
     )
     assert page.startswith("<!doctype html>")
     assert page.count('<section class="node">') == len(tree.decision_ids)
+
+
+# ---------------------------------------------------------------- reasoning
+
+
+class ReasoningProfileBackend(ProfileBackend):
+    """Like ProfileBackend, but answers via two reasoning samples that average to the profile."""
+
+    def choose(self, messages: Sequence[Message], letters: Sequence[str]) -> ChoiceDistribution:
+        target = super().choose(messages, letters).probs
+        first = np.eye(len(letters))[0]
+        second = 2 * target - first  # mean of (first, second) is the target
+        if second.min() < 0:
+            first = second = target
+        samples = tuple(
+            ReasoningSample(f"trace {i} for {letters}", p, 1.0, 100 * (i + 1), truncated=i == 1)
+            for i, p in enumerate((first, second))
+        )
+        return ChoiceDistribution(np.mean([first, second], axis=0), 1.0, samples)
+
+
+def test_reasoning_prompt_asks_for_brief_thinking(tree: GameTree) -> None:
+    s = tree.infosets[0]
+    assert "Think briefly" in build_prompt(tree, s, reasoning=True).messages[1]["content"]
+    assert "Think briefly" not in build_prompt(tree, s).messages[1]["content"]
+
+
+def test_reasoning_samples_survive_shuffle_and_cache(
+    tree: GameTree, equilibrium: Profile, tmp_path: Path
+) -> None:
+    backend = ReasoningProfileBackend(tree, equilibrium, shuffle=True)
+    path = tmp_path / "cache.jsonl"
+    first = query_profile(tree, backend, shuffle=True, cache=ChoiceCache(path))
+    again = query_profile(tree, backend, shuffle=True, cache=ChoiceCache(path))
+    assert again.num_cached == len(tree.infosets)
+    for result in (first, again):
+        assert result.truncated_rate == pytest.approx(0.5)
+        assert result.mean_think_tokens == pytest.approx(150)
+        for q in result.queries:
+            assert len(q.samples) == 2
+            mean = np.mean([q.action_probs(s.probs) for s in q.samples], axis=0)
+            assert np.allclose(mean, equilibrium.at(q.infoset))  # samples map to tree actions
+    assert again.queries[3].samples[0].thinking == first.queries[3].samples[0].thinking
+
+
+def test_render_reasoning(tree: GameTree, equilibrium: Profile) -> None:
+    result = query_profile(tree, ReasoningProfileBackend(tree, equilibrium, shuffle=False))
+    page = render_reasoning(tree, result, equilibrium, "fake")
+    assert page.count('<section class="infoset">') == len(tree.infosets)
+    assert page.count("<details>") == 2 * len(tree.infosets)
+    assert "cut off" in page
+    assert "A) check" in page and "B) bet 1 chip" in page  # options as the model saw them

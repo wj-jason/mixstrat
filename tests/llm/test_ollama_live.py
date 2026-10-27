@@ -35,3 +35,14 @@ def test_kuhn_profile_from_ollama() -> None:
     assert result.min_legal_mass > 0.5
     for probs in result.profile.probs.values():
         assert np.allclose(probs.sum(axis=1), 1.0)
+
+
+def test_kuhn_reasoning_from_ollama() -> None:
+    tree = GameTree(GameConfig(name="kuhn"))
+    s = tree.infosets[0]
+    with OllamaBackend(MODEL, mode="reasoning", samples=1, think_tokens=64) as backend:
+        result = query_profile(tree, backend, reasoning=True)
+    assert all(len(q.samples) == 1 for q in result.queries)
+    assert result.queries[0].samples[0].thinking
+    assert result.queries[0].infoset == s
+    assert result.min_legal_mass > 0.5

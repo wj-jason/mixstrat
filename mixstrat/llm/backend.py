@@ -24,9 +24,21 @@ class BackendError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ReasoningSample:
+    """One sampled reasoning trace and the answer distribution that follows it."""
+
+    thinking: str
+    probs: FloatArray  # over the offered letters
+    legal_mass: float
+    tokens: int  # tokens generated while reasoning
+    truncated: bool  # cut off at the token budget before the model finished thinking
+
+
+@dataclass(frozen=True)
 class ChoiceDistribution:
     probs: FloatArray  # over the offered letters, renormalized to sum to 1
     legal_mass: float  # probability the model put on the offered letters before renormalizing
+    samples: tuple[ReasoningSample, ...] = ()  # reasoning traces; empty in direct mode
 
 
 class PolicyBackend(Protocol):

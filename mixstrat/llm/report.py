@@ -326,3 +326,70 @@ above the equilibrium's. Hover a cell for details.</p>
 <th>actions</th><th>LLM</th><th>equilibrium</th><th>tv</th></tr>{dev_rows}</table></div>
 </main></body></html>
 """
+
+
+# ---------------------------------------------------------------- reasoning traces
+
+_REASONING_CSS = """
+.infoset { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; margin: 0 0 12px; }
+.dist { font-family: ui-monospace, monospace; font-size: 12px; color: var(--ink-2); margin: 2px 0; }
+.dist { white-space: pre-wrap; }
+.dist b { color: var(--ink); font-family: system-ui, sans-serif; font-weight: 600;
+  display: inline-block; min-width: 92px; }
+.infoset details { margin: 6px 0 0; padding: 6px 10px; }
+.infoset summary { font-family: ui-monospace, monospace; font-size: 12px; }
+.cut { color: var(--ink); font-weight: 600; }
+pre { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 system-ui, sans-serif;
+  color: var(--ink); margin: 8px 0 0; }
+"""
+
+
+def _dist_text(labels: list[str], probs: Any) -> str:
+    return " / ".join(f"{a} {float(p):.2f}" for a, p in zip(labels, probs, strict=True))
+
+
+def render_reasoning(
+    tree: GameTree, result: PolicyResult, equilibrium: Profile, backend: str
+) -> str:
+    """Every reasoning trace, grouped by infoset, with the answer each trace led to."""
+    names = card_names(tree.config)
+    sections = []
+    for q in result.queries:
+        s = q.infoset
+        labels = [a.label for a in tree.actions_at(s)]
+        card = "?" if s.card is None else names[s.card]
+        title = f"{node_title(tree, tree.infoset_node[s])} | card {card}"
+        traces = []
+        for i, sample in enumerate(q.samples, 1):
+            answer = _dist_text(labels, q.action_probs(sample.probs))
+            cut = ' <span class="cut">cut off</span>' if sample.truncated else ""
+            traces.append(
+                f"<details><summary>sample {i}: {html.escape(answer)} &middot; "
+                f"{sample.tokens} tokens{cut}</summary>"
+                f"<pre>{html.escape(sample.thinking) or '(no thinking)'}</pre></details>"
+            )
+        sections.append(
+            f'<section class="infoset"><h3>{html.escape(title)}</h3>'
+            f'<div class="dist"><b>Options</b>{html.escape("   ".join(q.prompt.option_lines))}</div>'
+            f'<div class="dist"><b>LLM average</b>{html.escape(_dist_text(labels, q.probs))}</div>'
+            f'<div class="dist"><b>Equilibrium</b>'
+            f"{html.escape(_dist_text(labels, equilibrium.at(s)))}</div>"
+            f"{''.join(traces)}</section>"
+        )
+    samples = result.samples
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reasoning traces</title><style>{_CSS}{_REASONING_CSS}</style></head>
+<body><main>
+<h1>{html.escape(tree.config.name)}: reasoning traces</h1>
+<p class="sub">{html.escape(backend)} &middot; {len(samples)} traces over {len(result.queries)}
+infosets &middot; mean {result.mean_think_tokens:.0f} tokens &middot;
+{100 * result.truncated_rate:.0f}% cut off at the token budget</p>
+<p class="sub">Each trace is one sampled chain of thought; the answer next to it is the
+model's letter distribution right after that trace. "LLM average" is the mean over traces,
+the strategy that gets scored. Open a sample to read it.</p>
+{"".join(sections)}
+</main></body></html>
+"""

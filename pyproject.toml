@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 mixstrat-eval = "mixstrat.llm.cli:main"
+mixstrat-train = "mixstrat.train.distill:main"
 
 [project.optional-dependencies]
 llm = [

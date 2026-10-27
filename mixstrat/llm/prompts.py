@@ -15,6 +15,8 @@ from mixstrat.game.config import GameConfig
 from mixstrat.game.tree import Action, GameTree, Infoset, Node
 
 LETTERS = "ABCDEFGHIJ"
+# Start of the assistant turn, so the next token is the answer letter (see ollama.py).
+DEFAULT_PREFILL = "Answer: **"
 Message = dict[str, str]
 
 _FACES_3 = ("J", "Q", "K")
@@ -29,6 +31,14 @@ class Prompt:
     messages: list[Message]
     letters: tuple[str, ...]  # letters offered, in display order
     order: tuple[int, ...]  # order[i] = index in node.actions of the action shown as letters[i]
+
+    @property
+    def option_lines(self) -> list[str]:
+        """The lettered option lines exactly as shown to the model, e.g. "A) fold"."""
+        starts = tuple(f"{letter}) " for letter in self.letters)
+        return [
+            line for line in self.messages[-1]["content"].splitlines() if line.startswith(starts)
+        ]
 
 
 def card_names(cfg: GameConfig) -> tuple[str, ...]:
@@ -152,10 +162,16 @@ def _past_tense(action: Action, amount: float) -> str:
 
 
 def build_prompt(
-    tree: GameTree, infoset: Infoset, *, shuffle: bool = False, seed: int = 0
+    tree: GameTree,
+    infoset: Infoset,
+    *,
+    shuffle: bool = False,
+    seed: int = 0,
+    reasoning: bool = False,
 ) -> Prompt:
     """The prompt for ``infoset``. ``shuffle`` permutes which letter each action gets,
-    deterministically per (seed, infoset), to measure letter-position bias."""
+    deterministically per (seed, infoset), to measure letter-position bias.
+    ``reasoning`` asks the model to think briefly before answering."""
     cfg = tree.config
     node = tree.nodes[tree.infoset_node[infoset]]
     player = infoset.player
@@ -196,6 +212,8 @@ def build_prompt(
         amount = child.contributions[player] - mine
         lines.append(f"{letter}) {_describe_action(node.actions[a], amount, theirs - mine)}")
     lines.append("")
+    if reasoning:
+        lines.append("Think briefly: a few sentences at most, then answer.")
     lines.append(f"Reply with a single letter: {', '.join(letters)}.")
 
     messages = [

@@ -81,6 +81,11 @@ num_ranks = 13
 payoff = "low"
 description = "Lowest card wins."
 
+[kuhn_lowball]
+num_ranks = 3
+payoff = "low"
+description = "Classic Kuhn, but the lowest card wins: the equilibrium is Kuhn with J and K swapped. Transfer target for kuhn_classic training."
+
 [clairvoyance13]
 num_ranks = 13
 informed = [true, false]
