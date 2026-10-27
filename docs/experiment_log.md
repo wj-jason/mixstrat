@@ -231,6 +231,153 @@ Results (150 steps, lr 3e-5, uniform magnet $\beta = 0.02$):
   optimal. Next: vary the rules in training (`train_distribution` sweep) and
   stabilize self-play (`selfplay_stability` sweep).
 
+## 2026-10-27
+
+### 8. Sweeps: self-play stability and training distribution (qwen3:1.7b, direct)
+
+`mixstrat-sweep all`, 24 runs, 5 h 47 m, none failed. Experiment `post-training`,
+filter `tags.sweep`.
+
+**`selfplay_stability`** ($\beta \in \{0.05, 0.1, 0.2, 0.5\}$ × opponent window
+$\in \{1, 10\}$ × 2 seeds, 150 steps, kuhn3). kuhn3 exploitability, mean of the
+last 5 evals and both seeds:
+
+| $\beta$ \ window | 1 | 10 |
+|---|---|---|
+| 0.05 | 8.3% | 10.3% |
+| 0.1 | 13.9% | 12.7% |
+| 0.2 | 9.5% | 11.3% |
+| 0.5 | 13.7% | 14.9% |
+
+- Every run still cycles (6-21% through step 150); none settles. The first ~60
+  steps are nearly identical across all 16 runs, so the cycling comes from the
+  update itself, not the regularizer settings. The auto-tuner's choice
+  ($\beta$ 0.05, window 1) is within run-to-run noise.
+
+**`train_distribution`** (400 steps, batch 24, kuhn_lowball held out; A = kuhn3,
+B = + kuhn13, C = + kuhn13_lowball, D = + kuhn13_low_heavy, kuhn13_duplicates).
+kuhn_lowball exploitability (untrained 17.1%), last 5 evals / final:
+
+| Variant | Distill | Self-play | Training games (distill) |
+|---|---|---|---|
+| A | 54.1 / 54.4 | 41.4 / 49.6 | ~0.5% |
+| B | 53.4 / 53.3 | 56.5 / 53.1 | ~0.3% |
+| C | 43.2 / 47.1 | 22.7 / 17.0 | ~0.2% |
+| D | 42.9 / 39.9 | 46.3 / 66.6 | 1-3% |
+
+- Distillation learns every training game, including 13-card lowball (0.1%),
+  but 3-card lowball always ends up worse than untrained. More varied training
+  only shrinks the damage (54% → 40%).
+- C self-play dipped to 13.4% (step 225) and 7.2% (step 350, with legal mass
+  0.88) but bounced back each time; that's cycling, not transfer.
+- C distill on lowball: folds K to a bet (correct) but also folds J, the best
+  card. The rule is applied half-way.
+
+### 9. Does the model read the rules? Card-order probe and tests 1-3
+
+`mixstrat-probe` and `mixstrat-rules` (`outputs/rule_tests/`). Probe games: 3-card
+Kuhn under 3 label sets (J/Q/K, 2/3/4, the made-up Vex/Dorn/Pim) × rank list
+in order or reversed × highest or lowest wins. All 12 are the same game up to
+relabelling, so a model that reads the rules scores the same on all of them.
+
+**Test 1: which hypothesis predicts the strategy.** Mean TV to each prediction
+on the 7 probes whose labels have a training meaning (distill adapters):
+
+| | rules | last listed best | label recall | untrained |
+|---|---|---|---|---|
+| A | 0.41 | 0.28 | **0.22** | 0.61 |
+| B | 0.42 | 0.30 | **0.29** | 0.68 |
+| C | 0.44 | 0.39 | **0.20** | 0.61 |
+| D | 0.41 | 0.35 | **0.26** | 0.53 |
+
+**Test 2: one prompt line changed at a time.** Sensitivity = model shift /
+equilibrium shift; alignment = cosine between the two changes.
+
+| | reverse list: sens / align | flip showdown: sens / align | rename shift (ideal 0) |
+|---|---|---|---|
+| base | 0.04 / 0.02 | 0.02 / 0.03 | 0.05 |
+| A | 0.67 / -0.02 | 0.06 / -0.12 | 0.24 |
+| B | 0.59 / -0.04 | 0.11 / -0.18 | 0.32 |
+| C | 0.38 / 0.10 | 0.42 / 0.08 | 0.36 |
+| D | 0.51 / 0.21 | 0.53 / 0.20 | 0.35 |
+
+**Test 3: made-up labels.** A distill: 11.3% / 4.2% when highest wins (list in
+order / reversed), 42.6% / 54.2% when lowest wins.
+
+- Label recall fits best for every adapter, and the rules fit worst. Renaming,
+  which should change nothing, moves trained models 5-7× more than the
+  untrained one.
+- Reversing the rank list changes behaviour a lot, but in no consistent
+  direction (alignment ≈ 0). Models never trained on lowball ignore the
+  showdown line.
+- With labels that mean nothing, the model falls back on "last listed is
+  best": right whenever highest wins, wrong whenever lowest wins.
+- Same picture with shuffled answer letters. Caveats: one adapter per setting,
+  12 infosets per probe; self-play adapters are near-constant and excluded.
+
+So the model never works out card strength from the rules: it recalls what a
+label meant in training, falls back on list position for new labels, and mostly
+ignores the showdown rule. Every earlier training game used fixed labels, which
+explains section 8.
+
+### 10. Label-randomized distillation (`label_randomization` sweep)
+
+`--relabel 0.75 --relabel-flip 0.5` (`mixstrat/llm/relabel.py`). 25% of training
+prompts are unchanged; 37.5% get random card names (made-up words, numbers 5-99
+in random order, Greek letters, colours, animals); 37.5% get random names plus a
+flip (rank list reversed, showdown rule reversed). The target strategy is the
+same in all three, since every view is the same game. Probe labels never appear,
+and the J/Q/K prompts never say "lowest wins", so every held-out game is a new
+prompt. All held-out games are still kuhn3 up to relabelling: this tests
+recognizing the same game, not playing a new one.
+
+kuhn3 only (variant A), 400 steps, otherwise as in section 8:
+
+| Step | classic | lowball | lowball 2/3/4 | reversed | classic 2/3/4 | lowball reversed |
+|---|---|---|---|---|---|---|
+| seed 0, 225 | 23.5 | 27.8 | 27.0 | 25.0 | 24.9 | 27.0 |
+| seed 0, 275 | 5.5 | 49.7 | 23.3 | 15.9 | 14.6 | 28.5 |
+| seed 0, 325 | 5.0 | 5.9 | 4.4 | 3.0 | 2.9 | 7.2 |
+| **seed 0, 400** (`e73145ac`) | **1.1** | **3.1** | **1.1** | **2.2** | **0.9** | **1.6** |
+| seed 1, 400 (`12e1ce9b`) | 22.8 | 25.2 | 24.9 | 24.1 | 24.1 | 24.7 |
+
+- **Seed 0 transfers to every held-out game,** including kuhn_lowball at 3.1%
+  (every earlier run: 40-54%). It got there by overriding a conflicting prior:
+  the unchanged prompts still teach "J is weakest", and kuhn_lowball says J is
+  best.
+- **Both seeds first sit on a card-blind plateau** for ~225 steps: all six games
+  score the same, and the strategy is the equilibrium averaged over cards at
+  each history (facing a bet: fold J/Q/K 0.51/0.52/0.49 vs 1.00/0.67/0.00).
+  That's the cross-entropy optimum for a model that can't tell its card apart.
+  Training KL sits at ~0.4.
+- Seed 0 escaped at ~250: classic first (12.9% while the held-out games got
+  *worse*), then everything by step 325. **Seed 1 never escaped** in 400 steps.
+
+**Variant B** (kuhn3 + kuhn13, 400 steps): both seeds escape the plateau, at
+step ~200-225 (earlier than A). Final: kuhn_lowball 2.0% / 2.3%, other held-out
+games 1.6-4.8%, except kuhn_classic_234 at 8.5% / 11.1%. In kuhn13, 2/3/4 are the
+weakest cards, and some of that label prior survives.
+
+**Tests 1-3 on these adapters** (fixed letters; shuffled is the same):
+
+| | best fit (wins of 7) | reverse list: sens / align | flip showdown: sens / align | rename shift | made-up labels, lowest wins |
+|---|---|---|---|---|---|
+| A distill (section 9) | label (4) | 0.67 / -0.02 | 0.06 / -0.12 | 0.24 | 42.6 / 54.2 |
+| relabel A, seed 0 | **rules (7), TV 0.03** | 0.97 / 1.00 | 0.98 / 1.00 | 0.03 | **1.7 / 1.6** |
+| relabel A, seed 1 | card-blind | 0.02 / -0.08 | 0.03 / -0.06 | 0.01 | 24.7 / 24.8 |
+| relabel B, seed 0 | **rules (7), TV 0.07** | 1.02 / 0.99 | 1.09 / 0.98 | 0.06 | **2.7 / 1.3** |
+| relabel B, seed 1 | **rules (7), TV 0.08** | 0.99 / 0.99 | 1.04 / 0.98 | 0.07 | **2.9 / 4.5** |
+
+- The three adapters that escaped follow every line of the prompt by the right
+  amount in the right direction (sensitivity ≈ 1, alignment ≈ 0.99), ignore
+  renaming (shift ≈ the untrained model's 0.05), and play the made-up-label
+  lowball probes at 1-5%: none of them seen in training.
+- Seed 1 of A "fits" label recall only because it is card-blind everywhere,
+  including on the reference games the label prediction comes from.
+- So with randomized labels, the model reads the rules once it gets past the
+  plateau: 3 of 4 runs did within 400 steps. Run ids: A `e73145ac`, `12e1ce9b`;
+  B `d59b824d`, `66604751`.
+
 ## Takeaways so far
 
 1. Without reasoning, both model sizes play the same exploitable "always
@@ -240,13 +387,21 @@ Results (150 steps, lr 3e-5, uniform magnet $\beta = 0.02$):
 3. Qwen3's reasoning is long mostly because of hedging, not because it changes
    its mind; shorter reasoning is a cost goal more than an accuracy goal.
 4. Imitating CFR reaches equilibrium on the training game and transfers
-   negatively. This is the baseline any reward-based method has to beat on
-   lowball (52-53%) while staying well under the untrained 17% on kuhn3.
+   negatively. Adding more fixed-label games doesn't fix this (54% → 40% on
+   lowball at best).
 5. Train against the full-vocabulary distribution, or the model learns to put
    probability on invalid answers.
+6. Self-play cycles at every $\beta$ and window tried; the update rule, not
+   the regularizer, needs fixing.
+7. Trained models recall what card labels meant in training instead of reading
+   the rank list and showdown rule (section 9). Randomizing labels in training
+   fixes it: every run that got past an early card-blind plateau (3 of 4) reads
+   the rules (tests 1-3) and plays every relabelled 3-card game, kuhn_lowball
+   included, at 1-5%. Variant B (+ kuhn13) escaped sooner and in both seeds.
 
 ## Next
 
-Stage 1b: replace imitation with exact chip-value rewards (fixed CFR opponent,
-then regularized self-play) and see whether rewarding outcomes instead of
-answers changes what transfers to lowball. See `post_training_design.md`.
+The plateau is accepted as a cost of label randomization (3 of 4 runs escape
+within 400 steps; failed runs are easy to spot, since every game scores the
+same). Next: strategic transfer. Every held-out game so far was kuhn3 under new
+labels; the next test needs a game whose equilibrium really differs.

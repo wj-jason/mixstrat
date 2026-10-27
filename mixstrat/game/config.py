@@ -26,11 +26,12 @@ class GameConfig:
     first_actor: int = 0
     payoff: Payoff = "high"
     informed: tuple[bool, bool] = (True, True)
+    card_names: tuple[str, ...] | None = None  # display names, lowest rank first
     description: str = ""
 
     def __post_init__(self) -> None:
         # Accept lists (e.g. from TOML) and store tuples so configs stay hashable.
-        for f in ("deck", "deck_p2", "antes", "bet_sizes", "raise_sizes", "informed"):
+        for f in ("deck", "deck_p2", "antes", "bet_sizes", "raise_sizes", "informed", "card_names"):
             value = getattr(self, f)
             if value is not None and not isinstance(value, tuple):
                 object.__setattr__(self, f, tuple(value))
@@ -80,6 +81,11 @@ class GameConfig:
             fail(f"payoff must be one of {_PAYOFFS}")
         if len(self.informed) != 2:
             fail("informed must have one entry per player")
+        if self.card_names is not None:
+            if len(self.card_names) != len(self.deck):
+                fail("card_names needs one name per rank")
+            if len(set(self.card_names)) != len(self.card_names) or not all(self.card_names):
+                fail("card_names must be distinct and non-empty")
 
     # ------------------------------------------------------------ derived
 

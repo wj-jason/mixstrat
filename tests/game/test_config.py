@@ -71,3 +71,11 @@ def test_presets_load() -> None:
     assert games["kuhn13"].num_ranks == 13
     for g in games.values():
         assert g.deal_distribution().sum() == pytest.approx(1.0)
+
+
+def test_card_names_validated() -> None:
+    assert GameConfig(name="k", card_names=["2", "3", "4"]).card_names == ("2", "3", "4")
+    with pytest.raises(ValueError, match="one name per rank"):
+        GameConfig(name="k", card_names=("2", "3"))
+    with pytest.raises(ValueError, match="distinct"):
+        GameConfig(name="k", card_names=("2", "2", "4"))

@@ -11,6 +11,7 @@
 #   first_actor         0 or 1
 #   payoff              "high" or "low"
 #   informed            [player 0 sees own card, player 1 sees own card]
+#   card_names          display names for the ranks, lowest first (default: J Q K / 2..A / 1..n)
 #   description         free text
 
 # ---------------------------------------------------------------- baselines
@@ -90,3 +91,32 @@ description = "Classic Kuhn, but the lowest card wins: the equilibrium is Kuhn w
 num_ranks = 13
 informed = [true, false]
 description = "Only player 0 sees their card."
+
+# ---------------------------------------------------------------- card-order probes
+# Same 3-card games with different card labels, to tell "learned J/Q/K habits" apart
+# from "read the rules". Strategically, kuhn_classic_234 = kuhn_classic and
+# kuhn_lowball_234 = kuhn_lowball. The reversed listings put K lowest: under
+# "highest wins" J is then the best card (the kuhn_lowball equilibrium), and under
+# "lowest wins" K is the best card (the kuhn_classic equilibrium, same labels).
+
+[kuhn_classic_234]
+num_ranks = 3
+card_names = ["2", "3", "4"]
+description = "kuhn_classic with cards 2, 3, 4."
+
+[kuhn_lowball_234]
+num_ranks = 3
+payoff = "low"
+card_names = ["2", "3", "4"]
+description = "kuhn_lowball with cards 2, 3, 4: lowest card (2) wins."
+
+[kuhn_reversed]
+num_ranks = 3
+card_names = ["K", "Q", "J"]
+description = "Ranks listed K < Q < J, highest wins: J is best, as in kuhn_lowball, but stated through the rank order."
+
+[kuhn_lowball_reversed]
+num_ranks = 3
+payoff = "low"
+card_names = ["K", "Q", "J"]
+description = "Ranks listed K < Q < J, lowest wins: K is best, so the right play matches kuhn_classic card for card."

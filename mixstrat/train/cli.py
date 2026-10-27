@@ -35,6 +35,7 @@ from mixstrat.game.values import ActionValues
 from mixstrat.llm.evaluate import Evaluation, infoset_rows
 from mixstrat.llm.hf import DEFAULT_MODEL, HFBackend
 from mixstrat.llm.policy import PolicyResult
+from mixstrat.llm.relabel import Relabeler
 from mixstrat.train.common import (
     LORA_TARGETS,
     MIN_LEGAL_MASS,
@@ -122,6 +123,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--no-shuffle", action="store_true", help="fixed answer letters in training"
     )
+    parser.add_argument(
+        "--relabel",
+        type=float,
+        default=0.0,
+        help="distill: show each infoset with random card names this often (see llm/relabel.py)",
+    )
+    parser.add_argument(
+        "--relabel-flip",
+        type=float,
+        default=0.5,
+        help="distill: of the relabelled prompts, this share also list ranks in reverse "
+        "and flip the payoff rule",
+    )
     parser.add_argument("--cfr-iterations", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=None, help="adapter directory to save")
@@ -141,6 +155,8 @@ def main(argv: list[str] | None = None) -> None:
         tags[key] = value
     if args.lr is None:
         args.lr = 1e-4 if args.objective == "distill" else 3e-5
+    if args.relabel and args.objective != "distill":
+        parser.error("--relabel is only supported with --objective distill")
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -235,6 +251,8 @@ def main(argv: list[str] | None = None) -> None:
                 "shuffle_train": not args.no_shuffle,
                 "cfr_iterations": args.cfr_iterations,
                 "seed": args.seed,
+                "relabel": args.relabel,
+                "relabel_flip": args.relabel_flip,
                 "adapter_dir": str(out),
                 **(
                     {
@@ -282,6 +300,11 @@ def main(argv: list[str] | None = None) -> None:
                 )
         return results
 
+    relabel = (
+        Relabeler(args.relabel, args.relabel_flip, np.random.default_rng(args.seed + 1))
+        if args.relabel
+        else None
+    )
     try:
         start = time.perf_counter()
         results = run_eval(0)
@@ -310,7 +333,7 @@ def main(argv: list[str] | None = None) -> None:
                     **common,
                 )
             else:
-                stats = distill_step(backend, items, optimizer, **common)
+                stats = distill_step(backend, items, optimizer, relabel=relabel, **common)
             if mlflow is not None:
                 mlflow.log_metrics({f"train/{k}": v for k, v in stats.items()}, step=step)
             if step % args.eval_every == 0 or step == args.steps:

@@ -38,3 +38,20 @@ A = { game = ["kuhn_classic"] }
 B = { game = ["kuhn_classic", "kuhn13"] }
 C = { game = ["kuhn_classic", "kuhn13", "kuhn13_lowball"] }
 D = { game = ["kuhn_classic", "kuhn13", "kuhn13_lowball", "kuhn13_low_heavy", "kuhn13_duplicates"] }
+
+# Does training on randomly relabelled prompts make the model read the rules? With
+# probability 0.75 each training infoset is shown under random card names from
+# llm/relabel.py (half of those also list the ranks in reverse and flip the
+# showdown rule; the target strategy is unchanged). The probe labels (J/Q/K
+# reversals, 2/3/4, Vex/Dorn/Pim) never appear, so every held-out game is new.
+# Compare with train_distribution A/B distill (same settings, no relabelling),
+# then run `mixstrat-rules collect --adapter <these checkpoints>`.
+[label_randomization]
+description = "Distill with random card labels and rank listings; test transfer to relabelled and lowball games."
+est_minutes = 25
+base = { objective = "distill", steps = 400, eval_every = 25, batch_infosets = 24, relabel = 0.75, relabel_flip = 0.5, held_out = ["kuhn_lowball", "kuhn_lowball_234", "kuhn_reversed", "kuhn_classic_234", "kuhn_lowball_reversed"] }
+grid = { seed = [0, 1] }
+
+[label_randomization.variants]
+A = { game = ["kuhn_classic"] }
+B = { game = ["kuhn_classic", "kuhn13"] }

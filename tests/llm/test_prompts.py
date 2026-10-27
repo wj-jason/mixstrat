@@ -87,3 +87,30 @@ def test_every_preset_infoset_has_a_prompt() -> None:
             text = prompt.messages[1]["content"]
             for letter in prompt.letters:
                 assert f"\n{letter}) " in text, (name, str(s))
+
+
+def test_card_names_override_defaults() -> None:
+    presets = load_games(PRESETS)
+    assert card_names(presets["kuhn_lowball_234"]) == ("2", "3", "4")
+    rules = rules_text(presets["kuhn_reversed"], 0)
+    assert "Ranks from lowest to highest: K, Q, J." in rules
+    assert "the highest card wins" in rules
+
+
+def test_card_order_probes_match_their_targets() -> None:
+    """Relabelled games have the same equilibrium, card name for card name."""
+    from mixstrat.game.cfr import solve
+
+    presets = load_games(PRESETS)
+
+    def by_name(game: str) -> dict[tuple[int, str | None, tuple[str, ...]], list[float]]:
+        tree = GameTree(presets[game])
+        names = card_names(tree.config)
+        profile = solve(tree, 3000).profile
+        return {
+            (i.player, names[i.card], i.history): profile.at(i).round(2).tolist()
+            for i in tree.infosets
+        }
+
+    assert by_name("kuhn_reversed") == by_name("kuhn_lowball")
+    assert by_name("kuhn_lowball_reversed") == by_name("kuhn_classic")

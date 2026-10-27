@@ -46,9 +46,12 @@ def sample_items(games: Sequence[Game], batch: int, rng: np.random.Generator) ->
     return items
 
 
-def model_profile(backend: HFBackend, tree: GameTree, micro_batch: int) -> Profile:
-    """The model's current strategy (fixed answer letters), batched and without gradients."""
-    prompts = [build_prompt(tree, s) for s in tree.infosets]
+def model_profile(
+    backend: HFBackend, tree: GameTree, micro_batch: int, *, shuffle: bool = False, seed: int = 0
+) -> Profile:
+    """The model's current strategy (fixed answer letters unless ``shuffle``), batched and
+    without gradients."""
+    prompts = [build_prompt(tree, s, shuffle=shuffle, seed=seed) for s in tree.infosets]
     table: dict[Infoset, FloatArray] = {}
     with torch.no_grad():
         for start in range(0, len(prompts), micro_batch):

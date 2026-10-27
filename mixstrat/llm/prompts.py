@@ -43,6 +43,8 @@ class Prompt:
 
 def card_names(cfg: GameConfig) -> tuple[str, ...]:
     """Display names for ranks, lowest first."""
+    if cfg.card_names is not None:
+        return cfg.card_names
     n = cfg.num_ranks
     if n == 3:
         return _FACES_3

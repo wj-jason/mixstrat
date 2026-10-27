@@ -16,6 +16,8 @@ dependencies = [
 mixstrat-eval = "mixstrat.llm.cli:main"
 mixstrat-train = "mixstrat.train.cli:main"
 mixstrat-sweep = "mixstrat.train.sweep:main"
+mixstrat-probe = "mixstrat.train.probe:main"
+mixstrat-rules = "mixstrat.train.rule_tests:main"
 
 [project.optional-dependencies]
 llm = [

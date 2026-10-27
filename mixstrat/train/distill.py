@@ -14,11 +14,12 @@ expected to transfer poorly to held-out games.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import torch
 
+from mixstrat.game.tree import GameTree, Infoset
 from mixstrat.llm.hf import HFBackend
 from mixstrat.llm.prompts import build_prompt
 from mixstrat.train.common import Item
@@ -33,6 +34,7 @@ def distill_step(
     seed: int,
     micro_batch: int,
     mass_weight: float = 1.0,
+    relabel: Callable[[GameTree, Infoset], tuple[GameTree, Infoset]] | None = None,
 ) -> dict[str, float]:
     """One optimizer step on ``items`` (infosets of one or more games). Per infoset the loss is
 
@@ -43,10 +45,14 @@ def distill_step(
     Infosets are processed ``micro_batch`` at a time with gradient accumulation,
     which gives the same gradient as one full batch in less memory.
 
+    ``relabel`` (e.g. a ``Relabeler``) picks the view each infoset is shown under;
+    the target stays the infoset's equilibrium strategy, which relabelling preserves.
+
     Returns ``loss``, ``kl`` (from the equilibrium to the renormalized letter
     distribution), ``leak`` (mean -log legal mass) and ``legal_mass_min``.
     """
-    prompts = [build_prompt(game.tree, s, shuffle=shuffle, seed=seed) for game, s in items]
+    views = [relabel(game.tree, s) if relabel else (game.tree, s) for game, s in items]
+    prompts = [build_prompt(tree, s, shuffle=shuffle, seed=seed) for tree, s in views]
     targets = [game.equilibrium.at(s) for game, s in items]
     optimizer.zero_grad()
     total_loss, total_kl, total_leak, min_mass = 0.0, 0.0, 0.0, 1.0
