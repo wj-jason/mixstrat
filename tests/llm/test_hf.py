@@ -16,6 +16,7 @@ def test_letter_logprobs_add_variants_and_renormalize() -> None:
     probs = torch.tensor([0.1, 0.2, 0.3, 0.05, 0.35])  # tokens 0..4
     out = letter_logprobs_from_row(probs.log(), [[0, 2], [1]])  # A = tokens 0+2, B = token 1
     assert float(out.legal_mass) == pytest.approx(0.6)
+    assert float(out.log_legal_mass) == pytest.approx(math.log(0.6))
     assert out.logprobs.exp().tolist() == pytest.approx([0.4 / 0.6, 0.2 / 0.6])
 
 

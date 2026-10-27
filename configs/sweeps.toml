@@ -1,0 +1,34 @@
+# Sweeps for `mixstrat-sweep <name>`. Each top-level table is one sweep; every run
+# is one `mixstrat-train` call. Keys:
+#   description   free text
+#   est_minutes   rough minutes per run, for the --dry-run estimate
+#   base          mixstrat-train options shared by every run (underscores for dashes)
+#   grid          options to vary; every combination runs
+#   variants      optional named option sets, each crossed with the grid
+
+# Does a stronger magnet or an averaged opponent stop self-play from cycling?
+# With beta = 0.02 and no averaging (run cf525b35), exploitability bounced
+# between 7% and 17% as the model hopped between pure strategies.
+[selfplay_stability]
+description = "Self-play stability on kuhn3: magnet strength x opponent averaging, 2 seeds."
+est_minutes = 8
+base = { objective = "value-self-play", game = ["kuhn_classic"], held_out = ["kuhn_lowball"], steps = 150, eval_every = 10 }
+grid = { beta = [0.05, 0.1, 0.2, 0.5], window = [1, 10], seed = [0, 1] }
+
+# Does training on varied rules make transfer to 3-card lowball appear? Variant C
+# is the key test: the model sees "lowest card wins" only with 13 cards. Set beta
+# and window to the best selfplay_stability result before running. Self-play
+# recomputes its values every 5 steps (value_refresh): with 13-card games the
+# strategy snapshot is ~100k tokens and would otherwise double the run time.
+# Measured: ~17-22 min per run for A, ~40-55 min for B-D (~5.1 h total).
+[train_distribution]
+description = "Which training games make kuhn_lowball transfer appear? Distill vs self-play."
+est_minutes = 38
+base = { steps = 400, eval_every = 25, batch_infosets = 24, held_out = ["kuhn_lowball"], beta = 0.2, window = 10, value_refresh = 5 }
+grid = { objective = ["distill", "value-self-play"] }
+
+[train_distribution.variants]
+A = { game = ["kuhn_classic"] }
+B = { game = ["kuhn_classic", "kuhn13"] }
+C = { game = ["kuhn_classic", "kuhn13", "kuhn13_lowball"] }
+D = { game = ["kuhn_classic", "kuhn13", "kuhn13_lowball", "kuhn13_low_heavy", "kuhn13_duplicates"] }

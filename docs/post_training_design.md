@@ -72,24 +72,25 @@ loaded into Ollama with `ollama create` for side-by-side evaluation.
 Because the game tree is known, a trace's answer can be scored exactly instead
 of by playing out noisy hands.
 
-For an infoset `I` (player `i`, card `c`, betting node `n`) and a fixed
-strategy profile `σ` for everything else, the conditional value of action `a` is
+For an infoset $I$ (player $i$, card $c$, betting node $n$) and a fixed
+strategy profile $\sigma$ for everything else, the conditional value of action $a$ is
 
-```
-q(I, a) = Σ_o P(o | c) · reach_opp(n, o) · V(child_a | c, o)  /  Σ_o P(o | c) · reach_opp(n, o)
-```
+$$
+q(I, a) = \frac{\sum_{o} P(o \mid c)\, \pi^{\sigma}_{-i}(n, o)\, V^{\sigma}(n_a \mid c, o)}{\sum_{o} P(o \mid c)\, \pi^{\sigma}_{-i}(n, o)}
+$$
 
-where `o` ranges over the opponent's cards, `reach_opp` is the opponent's
-probability of reaching `n` under `σ`, and `V` is the chip value to player `i`
-of continuing from the child under `σ` (the player's own later decisions use
-the current policy). These are the same per-action values `best_response.py`
+where $o$ ranges over the opponent's cards, $\pi^{\sigma}_{-i}(n, o)$ is the
+opponent's probability of reaching $n$ under $\sigma$ while holding $o$, $n_a$ is
+the child of $n$ reached by action $a$, and $V^{\sigma}$ is the chip value to
+player $i$ of continuing from there under $\sigma$ (the player's own later
+decisions use the current policy). These are the same per-action values `best_response.py`
 and `cfr.py` already compute.
 
-A trace whose answer distribution is `p` (read from the letter logprobs) earns
+A trace whose answer distribution is $p$ (read from the letter logprobs) earns
 
-```
-R(trace) = Σ_a p_a · q(I, a)
-```
+$$
+R(\text{trace}) = \sum_{a} p_a \, q(I, a)
+$$
 
 This has no sampling noise from the deal or the opponent, and the answer part
 is differentiable: the letter softmax gives exact gradients for the readout,
@@ -99,18 +100,18 @@ and only the reasoning tokens need a policy-gradient estimate.
 
 | Option | Pros | Cons | Use |
 |---|---|---|---|
-| A. Imitate CFR: reward `-KL(σ_CFR(I) ‖ p)` | stable, fast, clear target | teaches answers, not reasoning; likely memorizes kuhn3 and transfers poorly; Player 0's equilibrium isn't unique | pipeline check only |
-| B. Fixed CFR opponent: `q` computed against `σ_CFR` | stable, simple | the best reply to an equilibrium is often a *pure* strategy, so the model learns to exploit, not to mix | stage 1 |
-| C. Self-play: `q` computed against the model's own current profile | targets the equilibrium; rewards reasoning about the opponent | plain policy-gradient self-play cycles in mixed games | stage 2+ |
+| A. Imitate CFR: reward $-\mathrm{KL}\left(\sigma_{\mathrm{CFR}}(I) \Vert p\right)$ | stable, fast, clear target | teaches answers, not reasoning; likely memorizes kuhn3 and transfers poorly; Player 0's equilibrium isn't unique | pipeline check only |
+| B. Fixed CFR opponent: $q$ computed against $\sigma_{\mathrm{CFR}}$ | stable, simple | the best reply to an equilibrium is often a *pure* strategy, so the model learns to exploit, not to mix | stage 1 |
+| C. Self-play: $q$ computed against the model's own current profile | targets the equilibrium; rewards reasoning about the opponent | plain policy-gradient self-play cycles in mixed games | stage 2+ |
 
-For C, the current profile comes for free from the training batch: the K
+For C, the current profile comes for free from the training batch: the $K$
 traces per infoset are samples from the current policy. Two stabilizers:
 
 - **Regularization** toward a reference policy (KL penalty to the frozen
   starting model, in the spirit of magnetic mirror descent), which makes
   regularized self-play converge in two-player zero-sum games instead of
   cycling.
-- **Averaged opponents**: compute `q` against a reach-weighted average of
+- **Averaged opponents**: compute $q$ against a reach-weighted average of
   recent profiles, not just the latest one.
 
 Transfer is the goal, so the main runs should use C. A and B exist to get the
@@ -121,26 +122,29 @@ pipeline working and to give reference points.
 **Direct mode (no reasoning).** One forward pass per infoset. The loss is the
 exact expected value plus a KL anchor:
 
-```
-L = -Σ_I w_I Σ_a p_θ(a | I) q(I, a)  +  β · Σ_I w_I KL(p_θ(· | I) ‖ p_ref(· | I))
-```
+$$
+\mathcal{L}(\theta) = -\sum_{I} w_I \sum_{a} p_\theta(a \mid I)\, q(I, a) \;+\; \beta \sum_{I} w_I \, \mathrm{KL}\left(p_\theta(\cdot \mid I) \,\Vert\, p_{\mathrm{ref}}(\cdot \mid I)\right)
+$$
 
-with `w_I` the infoset's reach probability under current play (or uniform).
+with $w_I$ the infoset's reach probability under current play (or uniform) and
+$\beta$ the strength of the anchor to the reference (starting) model.
 There's no rollout cost; one step over kuhn3 is 12 forward passes.
 
-**Reasoning mode (GRPO-style).** For each infoset, sample a group of K traces
+**Reasoning mode (GRPO-style).** For each infoset, sample a group of $K$ traces
 from the current policy (thinking on, with a token budget), read each trace's
-answer distribution `p` exactly, and score it:
+answer distribution $p$ exactly, and score it:
 
-```
-R'(trace) = R(trace) - λ · tokens / 1000
-A(trace)  = R'(trace) - mean over the group
-```
+$$
+R'(\text{trace}) = R(\text{trace}) - \lambda \cdot \frac{\text{tokens}}{1000},
+\qquad
+A(\text{trace}) = R'(\text{trace}) - \frac{1}{K} \sum_{k=1}^{K} R'(\text{trace}_k)
+$$
 
-Update with the policy-gradient loss `-A · log π_θ(trace tokens)` (clipped,
-GRPO/PPO style) plus the exact readout gradient and the KL anchor. The length
-penalty `λ` targets the hedging directly; `R` is on the scale of about ±2 chips,
-so `λ ≈ 0.01-0.05` per 1000 tokens is a reasonable starting range to sweep. An
+Update with the policy-gradient loss $-A \cdot \log \pi_\theta(\text{trace tokens})$
+(clipped, GRPO/PPO style) plus the exact readout gradient and the KL anchor. The
+length penalty $\lambda$ targets the hedging directly; $R$ is on the scale of
+about $\pm 2$ chips, so $\lambda \approx 0.01$ to $0.05$ per 1000 tokens is a
+reasonable starting range to sweep. An
 alternative is a hard budget that tightens over training (e.g. 3000 → 1500).
 
 A minimal custom loop is simplest for direct mode. For reasoning mode, TRL's

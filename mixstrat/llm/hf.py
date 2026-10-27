@@ -35,10 +35,31 @@ from mixstrat.llm.prompts import DEFAULT_PREFILL, Message
 DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
 
 
+class Float32Head(torch.autograd.Function):
+    """``hidden @ weight.T`` with a float32 result from bf16 inputs, no fp32 weight copy.
+
+    PyTorch has no backward for ``mm(..., out_dtype=...)``, so the backward is
+    written out: only the gradient for ``hidden`` is returned, because the output
+    weights stay frozen (LoRA trains adapters, and Qwen3 ties them to the input
+    embeddings).
+    """
+
+    @staticmethod
+    def forward(ctx: Any, hidden: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(weight)
+        return torch.mm(hidden, weight.T, out_dtype=torch.float32)
+
+    @staticmethod
+    def backward(ctx: Any, grad: torch.Tensor) -> tuple[torch.Tensor, None]:
+        (weight,) = ctx.saved_tensors
+        return torch.mm(grad.to(weight.dtype), weight), None
+
+
 @dataclass
 class LetterLogprobs:
     logprobs: torch.Tensor  # over the offered letters, normalized among them
     legal_mass: torch.Tensor  # probability on the offered letters before normalizing
+    log_legal_mass: torch.Tensor  # its log, computed stably
 
 
 def letter_logprobs_from_row(
@@ -51,7 +72,7 @@ def letter_logprobs_from_row(
     """
     per_letter = torch.stack([torch.logsumexp(row[list(ids)], dim=0) for ids in variant_ids])
     total = torch.logsumexp(per_letter, dim=0)
-    return LetterLogprobs(per_letter - total, total.exp())
+    return LetterLogprobs(per_letter - total, total.exp(), total)
 
 
 class HFBackend:
@@ -139,8 +160,15 @@ class HFBackend:
         inputs = self.tokenizer(texts, return_tensors="pt", padding=True).to(self.device)
         # Only the last position is needed (left padding keeps it real); computing the
         # full-vocabulary logits for every position would take ~1.5 GB for kuhn3.
-        logits = self.model(**inputs, logits_to_keep=1).logits[:, -1, :]
-        rows = torch.log_softmax(logits.float(), dim=-1)
+        out = self.model(**inputs, output_hidden_states=True, logits_to_keep=1)
+        # Recompute that position's logits with a float32 result. The model's own bf16
+        # logits are rounded to multiples of 0.125-0.25 at typical magnitudes, which
+        # quantizes answer probabilities (a 1/3 mix can only be 0.32 or 0.38) and swallows
+        # small training updates.
+        hidden = out.hidden_states[-1][:, -1, :]
+        weight = self.model.get_output_embeddings().weight
+        logits = Float32Head.apply(hidden, weight)
+        rows = torch.log_softmax(logits, dim=-1)
         return [
             letter_logprobs_from_row(row, [self._variant_ids(letter) for letter in letters])
             for row, (_, letters) in zip(rows, batch, strict=True)
