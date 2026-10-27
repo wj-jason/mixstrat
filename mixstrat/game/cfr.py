@@ -16,11 +16,12 @@ a single row (one infoset per node) and summed over cards.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
 from mixstrat.game.best_response import Exploitability, exploitability, oriented
+from mixstrat.game.refine import refine_off_path
 from mixstrat.game.strategy import Profile
 from mixstrat.game.tree import FloatArray, GameTree
 
@@ -136,6 +137,13 @@ class CFRPlus:
         return CFRResult(self.average_profile(), self.iteration, history)
 
 
-def solve(tree: GameTree, iterations: int = 2000, log_every: int = 0) -> CFRResult:
-    """Approximate a Nash equilibrium of ``tree`` with CFR+."""
-    return CFRPlus(tree).run(iterations, log_every=log_every)
+def solve(
+    tree: GameTree, iterations: int = 2000, log_every: int = 0, refine: bool = True
+) -> CFRResult:
+    """Approximate a Nash equilibrium of ``tree`` with CFR+. With ``refine``, infosets the
+    equilibrium never reaches play a best response instead of CFR's leftover average
+    (see ``refine.py``); nothing on the equilibrium path changes."""
+    result = CFRPlus(tree).run(iterations, log_every=log_every)
+    if refine:
+        result = replace(result, profile=refine_off_path(tree, result.profile))
+    return result

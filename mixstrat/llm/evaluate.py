@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from mixstrat.game.best_response import Exploitability, exploitability
+from mixstrat.game.refine import off_path
 from mixstrat.game.strategy import Profile, expected_value
 from mixstrat.game.tree import GameTree
 from mixstrat.llm.policy import PolicyResult
@@ -65,6 +66,7 @@ def infoset_rows(
     unique, so a large ``tv`` flags a difference worth a look, not necessarily a mistake.
     """
     names = card_names(tree.config)
+    off = off_path(tree, equilibrium)
     rows = []
     for q in result.queries:
         s = q.infoset
@@ -79,6 +81,7 @@ def infoset_rows(
                 "equilibrium": [round(float(p), 4) for p in eq],
                 "tv": round(0.5 * float(np.abs(q.probs - eq).sum()), 4),
                 "legal_mass": round(q.legal_mass, 4),
+                "off_path": s in off,
             }
         )
     return rows

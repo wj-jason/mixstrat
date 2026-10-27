@@ -378,6 +378,43 @@ weakest cards, and some of that label prior survives.
   plateau: 3 of 4 runs did within 400 steps. Run ids: A `e73145ac`, `12e1ce9b`;
   B `d59b824d`, `66604751`.
 
+### 11. Strategic transfer, setup: bet size
+
+Every held-out game so far was kuhn3 under new labels. The simplest game with a
+really different equilibrium: the same 3-card Kuhn, with only the bet size
+changed (presets `kuhn_quarter_pot`, `kuhn_pot`, `kuhn_overbet`). How
+exploitable each size's CFR equilibrium is in the other games:
+
+| strategy from \ played in | 0.25 pot | 0.5 pot | 1x pot | 2x pot |
+|---|---|---|---|---|
+| 0.25 pot | 0.0 | 3.3 | 10.0 | 23.3 |
+| 0.5 pot (classic) | 4.6 | 0.0 | 4.6 | 13.9 |
+| 1x pot | 11.4 | 7.6 | 0.0 | 1.5 |
+| 2x pot | 13.1 | 9.5 | 2.3 | 0.0 |
+
+Interpolating is too easy a test: in the half-pot game, the average of the 0.25
+and 1x equilibria is already 3.0%. Extrapolating is a real one: the half-pot
+strategy is 13.9% exploitable at 2x pot.
+
+**Control, evaluation only.** Adapters trained only at half pot, on the other bet sizes:
+
+| | 0.25 pot | 0.5 pot | 1x pot | 2x pot |
+|---|---|---|---|---|
+| untrained | 8.3 | 16.7 | 33.3 | 66.7 |
+| A distill | 6.2 | 0.5 | 4.9 | 16.0 |
+| relabel A, seed 0 | 5.2 | 1.1 | 4.4 | 14.4 |
+| relabel B, seeds 0 / 1 | 7.3 / 8.6 | 1.9 / 4.3 | 4.3 / 5.7 | 16.1 / 16.1 |
+| *copy the half-pot equilibrium* | *4.6* | *0* | *4.6* | *13.9* |
+
+As expected, every adapter plays its half-pot strategy whatever the bet: one
+bet size in training gives no signal for how strategy depends on it. Reading
+the rules (section 10) doesn't help here.
+
+**Experiment (`bet_size_transfer` sweep, ready to run).** Label-randomized
+distillation on quarter- and half-pot kuhn3, 2 seeds, 400 steps; held out:
+pot, 2x pot, kuhn_lowball. Transfer means beating the copy baseline: below
+4.6% at pot, and especially below 13.9% at 2x pot.
+
 ## Takeaways so far
 
 1. Without reasoning, both model sizes play the same exploitable "always
@@ -403,5 +440,5 @@ weakest cards, and some of that label prior survives.
 
 The plateau is accepted as a cost of label randomization (3 of 4 runs escape
 within 400 steps; failed runs are easy to spot, since every game scores the
-same). Next: strategic transfer. Every held-out game so far was kuhn3 under new
-labels; the next test needs a game whose equilibrium really differs.
+same). Next: strategic transfer, starting with bet size (section 11): run
+`mixstrat-sweep bet_size_transfer`.

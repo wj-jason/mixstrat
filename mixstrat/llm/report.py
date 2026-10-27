@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from mixstrat.game.refine import off_path
 from mixstrat.game.strategy import Profile
 from mixstrat.game.tree import GameTree
 from mixstrat.llm.evaluate import Evaluation
@@ -206,6 +207,7 @@ td.b1 { background: var(--s1); color: var(--t1); } td.b2 { background: var(--s2)
 td.b3 { background: var(--s3); color: var(--t3); } td.b4 { background: var(--s4); color: var(--t4); }
 td.b5 { background: var(--s5); color: var(--t5); } td.b6 { background: var(--s6); color: var(--t6); }
 td.b7 { background: var(--s7); color: var(--t7); }
+td.off { outline: 1px dashed var(--muted); outline-offset: -3px; }
 tr.gap td, tr.gap th { height: 6px; padding: 0; }
 .legend { display: flex; gap: 2px; align-items: center; color: var(--ink-2); font-size: 12px; margin: 4px 0 12px; }
 .legend span.sw { width: 28px; height: 14px; border-radius: 3px; display: inline-block; }
@@ -221,7 +223,8 @@ def _bin(p: float) -> int:
     return min(7, 1 + int(p * 7))
 
 
-def _matrix(tree: GameTree, nid: int, llm: Profile, eq: Profile) -> str:
+def _matrix(tree: GameTree, nid: int, llm: Profile, eq: Profile, off: set[tuple[int, int]]) -> str:
+    """``off``: (node, card) columns the equilibrium never reaches."""
     cards, labels = node_cards(tree, nid)
     node = tree.nodes[nid]
     who = "Player " + str(node.actor)
@@ -235,7 +238,13 @@ def _matrix(tree: GameTree, nid: int, llm: Profile, eq: Profile) -> str:
             for card, label in zip(cards, labels, strict=True):
                 p = float(profile.probs[nid][card, a])
                 tip = f"{who} holding {label} after {history}: {action.label} {p:.3f} ({source})"
-                cells.append(f'<td class="b{_bin(p)}" title="{html.escape(tip)}">{p:.2f}</td>')
+                cls_cell = f"b{_bin(p)}"
+                if (nid, int(card)) in off:
+                    tip += (
+                        "; off the equilibrium path (CFR never gets here; shown: its best response)"
+                    )
+                    cls_cell += " off" if source == "CFR" else ""
+                cells.append(f'<td class="{cls_cell}" title="{html.escape(tip)}">{p:.2f}</td>')
             head = f"{html.escape(action.label)} <span>{source}</span>"
             rows.append(f'<tr class="{cls}"><th class="row">{head}</th>{"".join(cells)}</tr>')
     return '<div class="scroll"><table>' + "".join(rows) + "</table></div>"
@@ -287,11 +296,14 @@ def render_report(
     )
     glossary = "".join(f"<dt>{html.escape(k)}</dt><dd>{html.escape(v)}</dd>" for k, v in GLOSSARY)
 
+    off = {
+        (tree.infoset_node[s], 0 if s.card is None else s.card) for s in off_path(tree, equilibrium)
+    }
     nodes = []
     for nid in tree.decision_ids:
         nodes.append(
             f'<section class="node"><h3>{html.escape(node_title(tree, nid))}</h3>'
-            f"{_matrix(tree, nid, result.profile, equilibrium)}</section>"
+            f"{_matrix(tree, nid, result.profile, equilibrium, off)}</section>"
         )
 
     worst = sorted(rows, key=lambda r: -r["tv"])[:10]
@@ -318,7 +330,9 @@ def render_report(
 <details><summary>Glossary</summary><dl>{glossary}</dl></details>
 <h2>Strategy by decision point</h2>
 <p class="sub">Each grid shows P(action | card) as a probability from 0 to 1: for every action, the LLM's row
-above the equilibrium's. Hover a cell for details.</p>
+above the equilibrium's. Hover a cell for details. Dashed CFR cells are off the equilibrium path:
+CFR never reaches them, so they show its best response there, and a gap means the LLM got
+somewhere equilibrium play doesn't.</p>
 <div class="legend">0&nbsp;{swatches}&nbsp;1</div>
 {"".join(nodes)}
 <h2>Largest differences from equilibrium</h2>

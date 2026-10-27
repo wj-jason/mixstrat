@@ -55,3 +55,15 @@ grid = { seed = [0, 1] }
 [label_randomization.variants]
 A = { game = ["kuhn_classic"] }
 B = { game = ["kuhn_classic", "kuhn13"] }
+
+# Strategic transfer, simplest version: does the model adjust its strategy to a
+# bet size it never trained on? Train on quarter- and half-pot 3-card Kuhn (with
+# label randomization, which made the model read the rules); test on pot and
+# 2x pot. Baseline to beat, copying the nearest trained equilibrium (half pot):
+# 4.6% on kuhn_pot, 13.9% on kuhn_overbet. Interpolating (testing half pot) would
+# be too easy: averaging the quarter- and pot-size equilibria is already 3.0%.
+[bet_size_transfer]
+description = "Train kuhn3 at quarter + half pot (relabelled); test at pot and 2x pot."
+est_minutes = 20
+base = { objective = "distill", game = ["kuhn_quarter_pot", "kuhn_classic"], held_out = ["kuhn_pot", "kuhn_overbet", "kuhn_lowball"], steps = 400, eval_every = 25, batch_infosets = 24, relabel = 0.75, relabel_flip = 0.5 }
+grid = { seed = [0, 1] }

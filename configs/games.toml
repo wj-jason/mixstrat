@@ -92,6 +92,26 @@ num_ranks = 13
 informed = [true, false]
 description = "Only player 0 sees their card."
 
+# ---------------------------------------------------------------- 3-card bet sizes
+# Strategic transfer: same cards and tree as kuhn_classic (half-pot bet), but a
+# different bet size changes the equilibrium. Playing kuhn_classic's equilibrium
+# here is 4.6% (quarter pot), 4.6% (pot) and 13.9% (2x pot) exploitable.
+
+[kuhn_quarter_pot]
+num_ranks = 3
+bet_sizes = [0.25]
+description = "3-card Kuhn, quarter-pot bet: bluff and bet more, call more."
+
+[kuhn_pot]
+num_ranks = 3
+bet_sizes = [1.0]
+description = "3-card Kuhn, pot-size bet."
+
+[kuhn_overbet]
+num_ranks = 3
+bet_sizes = [2.0]
+description = "3-card Kuhn, 2x-pot bet: call only with K."
+
 # ---------------------------------------------------------------- card-order probes
 # Same 3-card games with different card labels, to tell "learned J/Q/K habits" apart
 # from "read the rules". Strategically, kuhn_classic_234 = kuhn_classic and
