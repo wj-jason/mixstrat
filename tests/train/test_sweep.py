@@ -3,7 +3,7 @@ import tomllib
 import numpy as np
 import pytest
 
-from mixstrat.train.sweep import SWEEPS, expand, train_args
+from mixstrat.train.sweep import SWEEPS, choose_options, expand, train_args
 
 
 def test_expand_crosses_variants_with_grid() -> None:
@@ -57,3 +57,15 @@ def test_sample_items_splits_evenly_across_games() -> None:
     assert sum(g.name == "k3" for g, _ in items) == 12  # all 12 (its share is 12)
     assert sum(g.name == "k13" for g, _ in items) == 12
     assert len(sample_items(games, 0, rng)) == len(small.infosets) + len(big.infosets)
+
+
+def test_choose_options_prefers_low_and_stable() -> None:
+    runs = [
+        ({"beta": 0.02, "window": 1, "seed": 0}, [0.20, 0.07, 0.17, 0.08, 0.16, 0.07]),  # cycling
+        ({"beta": 0.02, "window": 1, "seed": 1}, [0.20, 0.09, 0.15, 0.08, 0.14, 0.09]),
+        ({"beta": 0.2, "window": 10, "seed": 0}, [0.20, 0.12, 0.10, 0.09, 0.09, 0.09]),  # settles
+        ({"beta": 0.2, "window": 10, "seed": 1}, [0.20, 0.11, 0.10, 0.10, 0.09, 0.09]),
+    ]
+    chosen, scores = choose_options(runs, ["beta", "window"], last=5)
+    assert chosen == {"beta": 0.2, "window": 10}
+    assert scores[(0.2, 10)] == pytest.approx(np.mean([0.098, 0.098]))

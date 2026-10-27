@@ -201,12 +201,15 @@ each game under `final/<game>/` in the MLflow run.
 ---
 
 **C5. Sweeps** ([train/sweep.py](../mixstrat/train/sweep.py))
-`mixstrat-sweep <name>` runs every combination defined in
-[configs/sweeps.toml](../configs/sweeps.toml), one `mixstrat-train` at a time.
-Runs are tagged `sweep=<name>` in MLflow, logged to
-`outputs/logs/sweeps/<name>/`, and skipped on a rerun once finished, so an
-interrupted sweep resumes with the same command. `--dry-run` lists the runs and
-the estimated time.
+`mixstrat-sweep all` runs every sweep in
+[configs/sweeps.toml](../configs/sweeps.toml) in order (`mixstrat-sweep <name>`
+runs one), one `mixstrat-train` at a time. Runs are tagged `sweep=<name>` in
+MLflow, logged to `outputs/logs/sweeps/<name>/`, and skipped on a rerun once
+finished, so an interrupted sweep resumes with the same command. `--dry-run`
+lists the runs and the estimated time. A sweep with a `tune` table takes some
+options from an earlier sweep's results: `train_distribution` uses the β and
+window whose self-play exploitability was lowest over the last 5 evaluations,
+averaged over seeds; the choice is saved to `tuning.json` and reused on resume.
 
 ## How the pieces connect
 

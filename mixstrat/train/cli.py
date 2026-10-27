@@ -53,7 +53,9 @@ OBJECTIVES = {
     "value-self-play": "1b-value-self-play",
 }
 
-log = logging.getLogger(__name__)
+# Named explicitly: under `python -m` (how mixstrat-sweep runs it) __name__ is "__main__",
+# which the "mixstrat.train" handler set up in main() would not see.
+log = logging.getLogger("mixstrat.train.cli")
 
 
 def main(argv: list[str] | None = None) -> None:
